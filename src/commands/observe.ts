@@ -20,16 +20,15 @@ export async function observePage(options: Partial<ObserveOptions> = {}): Promis
   const opts = { level: 'compact', includeElements: true, includeForms: true, includeLinks: true, ...options };
   const page = await getPage();
 
-  const [accessResult, title, url, interactiveElements, contentPreview] = await Promise.all([
+  const [accessResult, title, url, interactiveElements, contentPreview, forms, links] = await Promise.all([
     classifyAccessState(page),
     page.title(),
-    page.url(),
+    Promise.resolve(page.url()),
     opts.includeElements ? getAccessibilityTree(page) : Promise.resolve([]),
     getPageSummary(page),
+    opts.includeForms ? extractForms(page) : Promise.resolve([]),
+    opts.includeLinks ? extractPageLinks(page) : Promise.resolve([]),
   ]);
-
-  const forms = opts.includeForms ? await extractForms(page) : [];
-  const links = opts.includeLinks ? await extractPageLinks(page) : [];
 
   // Filter interactive elements based on level
   let filteredElements = interactiveElements;

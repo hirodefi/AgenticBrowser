@@ -268,7 +268,7 @@ export async function applyCDPStealth(cdp: any): Promise<void> {
   // Override navigator.platform, languages via CDP
   await cdp.send('Emulation.setLocaleOverride', { locale: 'en-US' });
   await cdp.send('Network.setUserAgentOverride', {
-    userAgent: '${defaultUserAgent}',
+    userAgent: defaultUserAgent,
     platform: 'Win32',
     userAgentMetadata: {
       brands: [

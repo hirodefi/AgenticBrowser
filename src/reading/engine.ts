@@ -8,6 +8,7 @@ import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import TurndownService from 'turndown';
 import { type ReadResult, type TableData } from '../state-machine/types.js';
+import { getCachedContent, setCachedContent } from '../cache/store.js';
 
 export interface ReadingOptions {
   scope: 'main_content' | 'full_page' | 'visible_only' | 'article';
@@ -38,6 +39,22 @@ turndown.remove(['script', 'style', 'nav', 'footer', 'header', 'iframe']);
  */
 export async function readPage(page: Page, options: Partial<ReadingOptions> = {}): Promise<ReadResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
+  const url = page.url();
+
+  // Check cache first
+  const cached = getCachedContent(url);
+  if (cached) {
+    return {
+      title: cached.title,
+      content: cached.content,
+      format: opts.format,
+      confidence: cached.confidence,
+      source: cached.source,
+      wordCount: cached.content.split(/\s+/).length,
+      tables: [],
+      links: [],
+    };
+  }
 
   // Try multiple sources and pick the best
   const sources = await Promise.all([
@@ -80,7 +97,7 @@ export async function readPage(page: Page, options: Partial<ReadingOptions> = {}
     content = content.substring(0, opts.maxLength) + '\n\n[Content truncated...]';
   }
 
-  return {
+  const result: ReadResult = {
     title: best.title,
     content,
     format: opts.format,
@@ -90,6 +107,13 @@ export async function readPage(page: Page, options: Partial<ReadingOptions> = {}
     tables,
     links,
   };
+
+  // Cache successful reads
+  if (best.score > 0.3 && content.length > 100) {
+    setCachedContent(url, content, best.title, best.source, best.score);
+  }
+
+  return result;
 }
 
 interface ExtractionResult {
@@ -140,20 +164,16 @@ async function extractFromReadability(page: Page): Promise<ExtractionResult> {
 async function extractFromMainContent(page: Page): Promise<ExtractionResult> {
   try {
     const result = await page.evaluate(() => {
-      // Try to find main content container
+      function cleanHtml(element: Element): string {
+        const clone = element.cloneNode(true) as Element;
+        clone.querySelectorAll('script, style, nav, footer, header, iframe, noscript, svg').forEach(el => el.remove());
+        return clone.innerHTML;
+      }
+
       const selectors = [
-        'article',
-        'main',
-        '[role="main"]',
-        '.post-content',
-        '.article-content',
-        '.entry-content',
-        '.content',
-        '#content',
-        '#main',
-        '.main-content',
-        '.post-body',
-        '.story-body',
+        'article', 'main', '[role="main"]', '.post-content', '.article-content',
+        '.entry-content', '.content', '#content', '#main', '.main-content',
+        '.post-body', '.story-body',
       ];
 
       let container: Element | null = null;
@@ -166,13 +186,11 @@ async function extractFromMainContent(page: Page): Promise<ExtractionResult> {
       }
 
       if (!container) {
-        // Fall back to largest text block
         const candidates = Array.from(document.querySelectorAll('div, section'));
         let maxLen = 0;
         for (const el of candidates) {
           const text = el.textContent || '';
           if (text.length > maxLen && text.length > 200) {
-            // Check it's not a wrapper of everything
             const directText = Array.from(el.childNodes)
               .filter(n => n.nodeType === Node.TEXT_NODE)
               .map(n => n.textContent || '')
@@ -189,11 +207,9 @@ async function extractFromMainContent(page: Page): Promise<ExtractionResult> {
         return { title: document.title, content: '', textLength: 0, hasStructure: false };
       }
 
-      // Clean the HTML
-      const cleaned = cleanHtml(container);
       return {
         title: document.title,
-        content: cleaned,
+        content: cleanHtml(container),
         textLength: container.textContent?.length || 0,
         hasStructure: container.querySelectorAll('h1, h2, h3, p').length > 3,
       };
@@ -246,6 +262,11 @@ async function extractFromStructuredData(page: Page): Promise<ExtractionResult> 
 async function extractFromBody(page: Page): Promise<ExtractionResult> {
   try {
     const html = await page.evaluate(() => {
+      function cleanHtml(element: Element): string {
+        const clone = element.cloneNode(true) as Element;
+        clone.querySelectorAll('script, style, nav, footer, header, iframe, noscript, svg').forEach(el => el.remove());
+        return clone.innerHTML;
+      }
       const body = document.body;
       if (!body) return '';
       return cleanHtml(body);
@@ -335,5 +356,3 @@ async function extractLinks(page: Page): Promise<{ text: string; href: string }[
   });
 }
 
-// Inline helper — must be inside page.evaluate
-declare function cleanHtml(element: Element): string;

@@ -4,6 +4,7 @@
 
 import Database from 'better-sqlite3';
 import { join } from 'path';
+import { createHash } from 'crypto';
 import { getConfig, initDataDir } from '../core/config.js';
 
 let db: Database.Database | null = null;
@@ -159,7 +160,7 @@ export function recordSiteSuccess(domain: string, loadTime: number, readMethod: 
   const existing = getSiteProfile(domain);
   updateSiteProfile(domain, {
     bestReadMethod: readMethod,
-    avgLoadTime: existing ? Math.round((existing.avgLoadTime || loadTime + loadTime) / 2) : loadTime,
+    avgLoadTime: existing ? Math.round(((existing.avgLoadTime || loadTime) + loadTime) / 2) : loadTime,
     successCount: (existing?.successCount || 0) + 1,
   });
 }
@@ -179,14 +180,7 @@ export function cleanExpiredCache(): void {
 }
 
 function hashUrl(url: string): string {
-  // Simple hash for URL
-  let hash = 0;
-  for (let i = 0; i < url.length; i++) {
-    const char = url.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
+  return createHash('sha256').update(url).digest('hex').substring(0, 16);
 }
 
 export function closeDb(): void {

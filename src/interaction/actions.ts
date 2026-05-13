@@ -146,12 +146,7 @@ export async function performAction(
 
       await el.click();
       if (value) {
-        // Clear existing text
-        await el.fill('');
-        // Type with human-like delays
-        for (const char of value) {
-          await page.keyboard.type(char, { delay: 50 + Math.random() * 80 });
-        }
+        await el.fill(value);
       }
       return { success: true, description: `Typed "${value}" into: ${intent}` };
     }

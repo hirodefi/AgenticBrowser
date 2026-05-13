@@ -82,35 +82,27 @@ export async function debugPage(options: Partial<DebugOptions> = {}): Promise<De
 }
 
 async function getConsoleEntries(page: any): Promise<ConsoleEntry[]> {
-  // We can't retroactively get console messages, but we can get recent errors
   const entries: ConsoleEntry[] = [];
 
-  try {
-    // Get page errors from CDP
-    const cdp = await page.context().newCDPSession(page);
-    // This only captures future messages, but it's useful for ongoing debugging
-    cdp.on('Log.entryAdded', (entry: any) => {
-      entries.push({
-        type: entry.entry.level === 'error' ? 'error' : entry.entry.level === 'warning' ? 'warn' : 'log',
-        text: entry.entry.text,
-        timestamp: entry.entry.timestamp,
-      });
-    });
-  } catch {}
-
-  // Also check for visible error text on page
+  // Collect visible error/warning elements on the page
   try {
     const errorTexts = await page.evaluate(() => {
-      const errors: string[] = [];
-      document.querySelectorAll('[class*="error"], [class*="warning"], [role="alert"]').forEach(el => {
-        const text = el.textContent?.trim();
-        if (text) errors.push(text);
+      const errors: { text: string; type: string }[] = [];
+      document.querySelectorAll('[class*="error"], [class*="warning"], [role="alert"]').forEach((el: Element) => {
+        const text = (el as HTMLElement).textContent?.trim();
+        if (text && text.length < 500) {
+          const cls = el.className || '';
+          errors.push({
+            text,
+            type: cls.includes('error') ? 'error' : 'warn',
+          });
+        }
       });
       return errors;
     });
 
-    for (const text of errorTexts) {
-      entries.push({ type: 'error', text, timestamp: Date.now() });
+    for (const { text, type } of errorTexts) {
+      entries.push({ type: type as any, text, timestamp: Date.now() });
     }
   } catch {}
 
@@ -121,8 +113,6 @@ async function getNetworkEntries(page: any): Promise<NetworkEntry[]> {
   const entries: NetworkEntry[] = [];
 
   try {
-    const cdp = await page.context().newCDPSession(page);
-    // Get network entries from performance API
     const perfEntries = await page.evaluate(() => {
       return performance.getEntriesByType('resource').map((e: any) => ({
         url: e.name,
@@ -152,13 +142,15 @@ async function getDomStats(page: any): Promise<DomStats> {
     const allElements = document.querySelectorAll('*');
     let maxDepth = 0;
 
-    function getDepth(el: Element, depth: number): void {
+    // Iterative depth traversal to avoid stack overflow on deep DOMs
+    const stack: [Element, number][] = [[document.documentElement, 0]];
+    while (stack.length > 0) {
+      const [el, depth] = stack.pop()!;
       if (depth > maxDepth) maxDepth = depth;
       for (const child of Array.from(el.children)) {
-        getDepth(child, depth + 1);
+        stack.push([child, depth + 1]);
       }
     }
-    getDepth(document.documentElement, 0);
 
     return {
       nodeCount: allElements.length,
