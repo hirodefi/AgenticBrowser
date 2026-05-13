@@ -9,3 +9,5 @@ dist/
 *.db-wal
 *.db-shm
 CHANGES.md
+PLAN.md
+REPORT.md
