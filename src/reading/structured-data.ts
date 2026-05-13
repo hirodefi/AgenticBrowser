@@ -8,12 +8,12 @@ import { type PageMetadata } from '../state-machine/types.js';
 
 export async function extractMetadata(page: Page): Promise<PageMetadata> {
   return page.evaluate(() => {
-    function getMeta(name: string): string {
+    const getMeta = (name: string): string => {
       const el = document.querySelector(`meta[name="${name}"], meta[property="${name}"]`);
       return el?.getAttribute('content') || '';
-    }
+    };
 
-    function extractJsonLd(): any[] {
+    const extractJsonLd = (): any[] => {
       const results: any[] = [];
       document.querySelectorAll('script[type="application/ld+json"]').forEach(script => {
         try {
@@ -23,7 +23,7 @@ export async function extractMetadata(page: Page): Promise<PageMetadata> {
         } catch {}
       });
       return results;
-    }
+    };
 
     const meta: any = {};
     meta.description = getMeta('description');

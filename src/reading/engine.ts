@@ -164,11 +164,11 @@ async function extractFromReadability(page: Page): Promise<ExtractionResult> {
 async function extractFromMainContent(page: Page): Promise<ExtractionResult> {
   try {
     const result = await page.evaluate(() => {
-      function cleanHtml(element: Element): string {
+      const cleanHtml = (element: Element): string => {
         const clone = element.cloneNode(true) as Element;
         clone.querySelectorAll('script, style, nav, footer, header, iframe, noscript, svg').forEach(el => el.remove());
         return clone.innerHTML;
-      }
+      };
 
       const selectors = [
         'article', 'main', '[role="main"]', '.post-content', '.article-content',
@@ -262,11 +262,11 @@ async function extractFromStructuredData(page: Page): Promise<ExtractionResult> 
 async function extractFromBody(page: Page): Promise<ExtractionResult> {
   try {
     const html = await page.evaluate(() => {
-      function cleanHtml(element: Element): string {
+      const cleanHtml = (element: Element): string => {
         const clone = element.cloneNode(true) as Element;
         clone.querySelectorAll('script, style, nav, footer, header, iframe, noscript, svg').forEach(el => el.remove());
         return clone.innerHTML;
-      }
+      };
       const body = document.body;
       if (!body) return '';
       return cleanHtml(body);
