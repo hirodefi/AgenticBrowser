@@ -82,9 +82,14 @@ export async function launchBrowser(session?: Session): Promise<BrowserContext> 
 
   behaviorConfig = resolvePreset(cfg.behaviorPreset, cfg.behaviorOverrides);
 
-  // Initial page
-  const pages = contextInstance.pages();
-  activePage = pages[0] ?? await contextInstance.newPage();
+  // Initial page. Persistent contexts ship an open page that loaded before
+  // we added the init script, so we replace it with a fresh one. New pages
+  // pick up the init script automatically.
+  const existing = contextInstance.pages();
+  for (const p of existing) {
+    await p.close().catch(() => {});
+  }
+  activePage = await contextInstance.newPage();
   await stealthHandle.applyToPage(activePage);
 
   return contextInstance;

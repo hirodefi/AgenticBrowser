@@ -1,0 +1,30 @@
+[package]
+name = "agentic-tls-shim"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Localhost HTTP proxy that re-handshakes outbound TLS with a Chrome-coherent ClientHello to defeat JA3/JA4/Akamai fingerprinting."
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tokio-rustls = "0.26"
+webpki-roots = "0.26"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+
+[[bin]]
+name = "agentic-tls-shim"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true

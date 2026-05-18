@@ -41,6 +41,7 @@ export function buildInitScript(p: FingerprintProfile): string {
 
   return `(() => {
 'use strict';
+try { Object.defineProperty(window, '__ab_stealth_applied', { value: true, configurable: false }); } catch (_) {}
 const D = ${data};
 
 // ---------- toString cloaking ----------
@@ -85,17 +86,18 @@ function replaceFn(obj, prop, impl, name) {
 }
 
 // ---------- automation marker removal (top priority) ----------
+// Real Chrome with no automation flags reports navigator.webdriver === false
+// (data property on Navigator.prototype). We install exactly that shape so a
+// descriptor probe sees the same get/set/configurable/enumerable Chrome has.
+try { delete Navigator.prototype.webdriver; } catch (_) {}
 try {
   Object.defineProperty(Navigator.prototype, 'webdriver', {
     get: cloak(function() { return false; }, 'get webdriver'),
-    set: undefined,
+    set: cloak(function() {}, 'set webdriver'),
     enumerable: true,
     configurable: true,
   });
 } catch (_) {}
-
-// Remove inherited webdriver getter on the instance level too
-try { delete Object.getPrototypeOf(navigator).webdriver; } catch (_) {}
 
 // Driver-injected hooks (various detection libs scan for these prefixes)
 const driverProps = Object.keys(window).filter(k =>

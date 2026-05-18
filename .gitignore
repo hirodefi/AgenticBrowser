@@ -13,3 +13,7 @@ PLAN.md
 REPORT.md
 .claude/
 test-run.ts
+tls-shim/target/
+runtime-binary/staging/
+runtime-binary/dist/
+scripts/validation-report.json

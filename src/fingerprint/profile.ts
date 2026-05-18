@@ -135,13 +135,16 @@ const DEVICE_MEMORY: Record<FpPlatform, number[]> = {
   linux: [4, 8, 16],
 };
 
-const TIMEZONES = [
-  'America/New_York', 'America/Chicago', 'America/Los_Angeles',
-  'Europe/London', 'Europe/Berlin', 'Europe/Paris', 'Europe/Amsterdam',
-  'Asia/Tokyo', 'Asia/Singapore', 'Australia/Sydney',
+/**
+ * Coherent region picks: timezone and locale always come from the same row,
+ * so we never end up with Tokyo + en-CA or Berlin + en-US.
+ */
+const REGIONS: { locale: string; timezones: string[] }[] = [
+  { locale: 'en-US', timezones: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles'] },
+  { locale: 'en-GB', timezones: ['Europe/London'] },
+  { locale: 'en-CA', timezones: ['America/Toronto', 'America/Vancouver'] },
+  { locale: 'en-AU', timezones: ['Australia/Sydney', 'Australia/Melbourne'] },
 ];
-
-const LOCALES = ['en-US', 'en-GB', 'en-CA', 'en-AU'];
 
 function uaFor(platform: FpPlatform, locale: string): UaProfile {
   if (platform === 'mac') {
@@ -217,8 +220,9 @@ let cached: FingerprintProfile | null = null;
 export function buildProfile(overrides: ProfileOverrides = {}): FingerprintProfile {
   const r: SeedRng = rng();
   const platform: FpPlatform = overrides.platform ?? detectHostPlatform();
-  const locale = overrides.locale ?? r.pick(LOCALES);
-  const timezone = overrides.timezone ?? r.pick(TIMEZONES);
+  const region = r.pick(REGIONS);
+  const locale = overrides.locale ?? region.locale;
+  const timezone = overrides.timezone ?? r.pick(region.timezones);
   const screen = r.pick(SCREEN_PROFILES[platform]);
   const gpu = r.pick(GPU_PROFILES[platform] as readonly GpuProfile[]);
   const ua = uaFor(platform, locale);
