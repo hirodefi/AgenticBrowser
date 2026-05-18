@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "chromium_target": "stable",
+  "platforms": ["darwin-arm64", "linux-x64", "windows-x64"],
+  "patches": [
+    { "id": "automation-binding-removal",    "priority": 1, "surface": "v8-binding",   "status": "planned" },
+    { "id": "cdp-runtime-isolation",         "priority": 1, "surface": "cdp",          "status": "planned" },
+    { "id": "process-info-cleanup",          "priority": 2, "surface": "process",      "status": "planned" },
+    { "id": "canvas-pipeline-noise",         "priority": 1, "surface": "graphics-2d",  "status": "planned" },
+    { "id": "webgl-parameter-noise",         "priority": 1, "surface": "graphics-gl",  "status": "planned" },
+    { "id": "webgl-program-noise",           "priority": 2, "surface": "graphics-gl",  "status": "planned" },
+    { "id": "font-list-randomization",       "priority": 2, "surface": "fonts",        "status": "planned" },
+    { "id": "audio-buffer-noise",            "priority": 2, "surface": "audio",        "status": "planned" },
+    { "id": "tls-clienthello-coherence",     "priority": 1, "surface": "network-tls",  "status": "planned" },
+    { "id": "http2-settings-coherence",      "priority": 1, "surface": "network-h2",   "status": "planned" },
+    { "id": "http3-quic-coherence",          "priority": 2, "surface": "network-h3",   "status": "planned" },
+    { "id": "webrtc-ice-coherence",          "priority": 1, "surface": "webrtc",       "status": "planned" },
+    { "id": "resolver-leak-removal",         "priority": 2, "surface": "network-dns",  "status": "planned" },
+    { "id": "screen-coherence",              "priority": 3, "surface": "system",       "status": "planned" },
+    { "id": "window-position-coherence",     "priority": 3, "surface": "system",       "status": "planned" },
+    { "id": "hardware-info-coherence",       "priority": 3, "surface": "system",       "status": "planned" },
+    { "id": "timezone-binary-flag",          "priority": 2, "surface": "intl",         "status": "planned" },
+    { "id": "locale-binary-flag",            "priority": 2, "surface": "intl",         "status": "planned" }
+  ]
+}

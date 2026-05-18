@@ -1,32 +1,41 @@
 import { join } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync } from 'fs';
+import type { ProxyInput } from '../network/proxy.js';
+import type { BehaviorPreset, BehaviorConfig } from '../behavior/config.js';
+import type { BackendName } from '../runtime/index.js';
 
 export interface BrowserConfig {
   headless: boolean;
-  channel: 'chrome' | 'chromium';
-  viewport: { width: number; height: number };
-  locale: string;
-  timezone: string;
+  backend?: BackendName;
+  proxy?: ProxyInput;
+  geoFromProxy: boolean;
+  viewport?: { width: number; height: number };
+  locale?: string;
+  timezone?: string;
+  fingerprintPlatform?: 'mac' | 'win' | 'linux';
   userAgent?: string;
   dataDir: string;
+  persistentProfile: boolean;
+  profileName: string;
   maxPages: number;
   challengeTimeout: number;
   navigationTimeout: number;
-  stealthLevel: 'normal' | 'aggressive';
+  behaviorPreset: BehaviorPreset;
+  behaviorOverrides?: Partial<BehaviorConfig>;
+  extraArgs?: string[];
 }
 
 const DEFAULT_CONFIG: BrowserConfig = {
   headless: false,
-  channel: 'chrome',
-  viewport: { width: 1920, height: 1080 },
-  locale: 'en-US',
-  timezone: 'America/New_York',
+  geoFromProxy: true,
   dataDir: join(homedir(), '.agentic-browser'),
+  persistentProfile: true,
+  profileName: 'default',
   maxPages: 10,
   challengeTimeout: 30000,
-  navigationTimeout: 30000,
-  stealthLevel: 'aggressive',
+  navigationTimeout: 45000,
+  behaviorPreset: 'relaxed',
 };
 
 let config: BrowserConfig = { ...DEFAULT_CONFIG };
@@ -42,10 +51,15 @@ export function updateConfig(partial: Partial<BrowserConfig>): BrowserConfig {
 
 export function initDataDir(): string {
   const dir = config.dataDir;
-  const subdirs = ['profiles', 'cache', 'logs'];
-  for (const sub of subdirs) {
+  for (const sub of ['profiles', 'cache', 'logs']) {
     const path = join(dir, sub);
     if (!existsSync(path)) mkdirSync(path, { recursive: true });
   }
+  return dir;
+}
+
+export function profileDir(name = config.profileName): string {
+  const dir = join(initDataDir(), 'profiles', name);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }

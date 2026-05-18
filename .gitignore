@@ -11,3 +11,5 @@ dist/
 CHANGES.md
 PLAN.md
 REPORT.md
+.claude/
+test-run.ts

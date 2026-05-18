@@ -1,46 +1,110 @@
 # AgenticBrowser
 
-> Fully autonomous browser runtime for AI agents.
-> Zero human intervention. If a human can access it, the agent accesses it.
+> Autonomous browser runtime for AI agents.
+> If a human can access it, the agent accesses it.
 
-## What It Does
+AgenticBrowser is a browser that gives AI agents a real, full-fidelity web.
+Anti-bot challenges are resolved without a human in the loop. Pages are
+read as clean content. Interactions happen by natural-language intent.
+Every behavioral signal — mouse path, typing cadence, scroll pattern — is
+modelled on real human telemetry.
 
-AgenticBrowser gives AI agents a real browser that handles the modern web autonomously:
+The runtime is layered. You can swap the substrate underneath (the real
+Chrome on your machine today, our patched-Chromium binary tomorrow)
+without touching agent code.
 
-- **Opens any URL** — JavaScript SPAs, iframes, shadow DOM, lazy loading, all handled
-- **Auto-solves challenges** — Cloudflare, reCAPTCHA, hCaptcha resolved automatically
-- **Reads clean content** — Smart multi-source extraction to markdown
-- **Interacts by intent** — "click the login button", "type in the search box"
-- **Extracts structured data** — Schema-driven extraction from any page
-- **Verifies goals** — "user is logged in", "page contains pricing"
-- **Recovers from blocks** — Tries reader mode, print version, viewport switching, etc.
+## What it does
 
-## How It's Different
+- **Opens any URL** including JS SPAs, iframes, shadow DOM, lazy content
+- **Auto-resolves challenges** including Cloudflare, reCAPTCHA, hCaptcha
+- **Reads clean content** via multi-source extraction to markdown
+- **Acts by intent** like `click the login button`, `type into the search box`
+- **Extracts structured data** from any page given a JSON schema
+- **Verifies goals** like `user is logged in`, `page contains pricing`
+- **Recovers from blocks** by trying reader mode, archive snapshots, print versions
+- **Persists profiles** to stay logged in across sessions
 
-| Feature | Playwright | gsd-browser | **AgenticBrowser** |
-|---|---|---|---|
-| Anti-bot handling | None | None | **Built-in (stealth + auto-solve)** |
-| Challenge solving | None | None | **Cloudflare + CAPTCHA autonomous** |
-| Content reading | Raw DOM | Snapshots | **Smart multi-source extraction** |
-| Intent-based actions | Selectors only | Refs + intents | **Natural language intents** |
-| Access state machine | No | No | **Yes (READABLE, CHALLENGE, etc.)** |
-| MCP integration | No | No | **Yes (9 MCP tools)** |
+## Architecture
 
-## Quick Start
-
-### As MCP Server (for Claude, Cursor, etc.)
-
-```bash
-# Install
-cd AgenticBrowser
-npm install
-npx playwright install chromium
-
-# Run as MCP server
-npm run mcp
+```
+Agent layer (MCP / CLI / SDK)
+        │
+Command router (open / read / act / extract / verify / recover / debug / navigate)
+        │
+Autonomous challenge solver  ◀──  Access state machine
+        │
+Smart reading + structured extraction
+        │
+Behavior layer (Bezier pointer · timed typing · realistic scroll)
+        │
+Stealth engine (CDP + init scripts + Client Hints + worker coverage)
+        │
+Runtime backend (chrome | patched binary — auto-selected)
 ```
 
-Add to your MCP config:
+Folders mirror this:
+
+| Path | What lives there |
+|---|---|
+| `src/commands/` | One file per agent verb |
+| `src/state-machine/` | Page classification (`READABLE`, `CHALLENGE_REQUIRED`, etc.) |
+| `src/solver/` | Cloudflare + CAPTCHA autonomous solvers |
+| `src/reading/` | Multi-source content extraction |
+| `src/interaction/` | Intent-resolution + accessibility tree |
+| `src/behavior/` | Pointer / typing / scrolling models |
+| `src/stealth/` | Init script generator + CDP coherence layer |
+| `src/fingerprint/` | Per-launch seed + coherent fingerprint profile |
+| `src/network/` | Proxy parsing, IP-to-geo, Chromium arg builder |
+| `src/runtime/` | Backend selection (chrome / patched binary) |
+| `src/core/` | Browser pool + config + sessions |
+| `runtime-binary/` | Patched-Chromium backend (build infrastructure) |
+
+## Stealth strategy
+
+Three layers, each closing a different category of detection:
+
+**Fingerprint coherence.** Every randomized surface (GPU vendor, screen
+dimensions, hardware concurrency, device memory, timezone, locale,
+Client Hints brands) is derived from a single per-launch seed, so values
+stay self-consistent across the entire session. A site that samples
+twice never catches drift.
+
+**CDP-level overrides.** Locale, timezone, user agent, Client Hints
+brands, and device metrics are set through CDP — not through
+JavaScript injection that detection libraries can flag. The same
+overrides propagate to workers, service workers, and same-origin
+iframes via auto-attach.
+
+**Behavioral realism.** Pointer movement follows cubic Bezier paths with
+random control points, ease-in-out, micro-wobble proportional to
+distance, burst-pause cadence, and occasional overshoot. Typing draws
+per-character delays from a class-aware distribution (digits faster than
+punctuation), with word-boundary bursts and a small typo+correction
+rate. Scrolling chunks with variable inter-chunk delays and occasional
+reverse micro-corrections.
+
+**Going further: source-level patches.** JS injection is structurally
+detectable — patched property descriptors and `Function.prototype.toString`
+shape leak no matter how carefully you mask them. The `runtime-binary/`
+backend is a Chromium build with fingerprint surfaces modified at the
+C++ / V8 binding level (canvas pipeline, WebGL parameters, audio buffers,
+TLS ClientHello, V8 webdriver binding). When the binary is present, the
+JS runtime detects it and routes through it automatically. See
+[runtime-binary/README.md](runtime-binary/README.md) for the patch
+manifest and build status.
+
+## Quick start
+
+```bash
+npm install
+npx playwright install chromium
+```
+
+### As MCP server
+
+```bash
+npm run mcp
+```
 
 ```json
 {
@@ -56,79 +120,70 @@ Add to your MCP config:
 ### As CLI
 
 ```bash
-# Open a URL (auto-handles Cloudflare/CAPTCHA)
 npx tsx src/cli.ts open https://example.com
-
-# Read page content as markdown
 npx tsx src/cli.ts read
-
-# Click by intent
 npx tsx src/cli.ts act click "the login button"
-
-# Extract structured data
-npx tsx src/cli.ts extract '{"products": [{"name": "", "price": ""}]}'
+npx tsx src/cli.ts extract '{"products":[{"name":"","price":""}]}'
 ```
 
 ### As SDK
 
 ```typescript
-import { openUrl, readContent, actOnPage } from 'agentic-browser';
+import { openUrl, readContent, actOnPage, updateConfig } from 'agentic-browser';
 
-// Open and auto-handle challenges
-const page = await openUrl('https://example.com');
+// Optional: configure proxy, behavior preset, persistent profile, geo
+updateConfig({
+  proxy: 'http://user:pass@proxy.example:8080',
+  geoFromProxy: true,
+  behaviorPreset: 'relaxed',
+  persistentProfile: true,
+});
 
-// Read clean markdown content
+const result = await openUrl('https://example.com');
 const content = await readContent({ format: 'markdown' });
-
-// Click by natural language intent
 await actOnPage({ action: 'click', intent: 'the pricing tab' });
 ```
 
-## MCP Tools
+## Configuration
 
-| Tool | Description |
+```typescript
+updateConfig({
+  headless: false,                          // default; headed avoids HeadlessChrome leak
+  backend: 'patched' | 'chrome',            // optional; auto when omitted
+  proxy: 'socks5://user:pass@host:1080',    // http(s) and socks5 both supported
+  geoFromProxy: true,                       // tz/locale auto-resolve from proxy IP
+  fingerprintPlatform: 'mac' | 'win' | 'linux',
+  persistentProfile: true,                  // avoids incognito-detection penalty
+  profileName: 'work',                      // separate cookie/localStorage stores
+  behaviorPreset: 'relaxed' | 'careful',
+});
+```
+
+Environment overrides:
+
+| Var | Effect |
 |---|---|
-| `browser_open` | Open URL, auto-handle challenges, return state |
-| `browser_observe` | Page summary + interactive elements |
-| `browser_read` | Clean content extraction (markdown/text/html) |
-| `browser_act` | Intent-based interaction (click, type, scroll, etc.) |
-| `browser_extract` | Schema-driven structured data extraction |
-| `browser_verify` | Goal/condition verification |
+| `AGENTIC_BROWSER_BACKEND` | Force `chrome` or `patched` |
+| `AGENTIC_BROWSER_BINARY` | Override path to patched binary |
+
+## MCP tools
+
+| Tool | Purpose |
+|---|---|
+| `browser_open` | Open URL, auto-resolve challenges, return state |
+| `browser_observe` | Page summary + interactive element list |
+| `browser_read` | Clean content extraction (markdown / text / html) |
+| `browser_act` | Intent-based interaction (click, type, scroll, hover, select, press) |
+| `browser_extract` | Schema-driven structured extraction |
+| `browser_verify` | Goal / condition verification |
 | `browser_recover` | Try alternative access methods |
 | `browser_debug` | Console, network, screenshot diagnostics |
 | `browser_navigate` | Back, forward, reload, goto |
 
-## Stealth Strategy
-
-The browser passes anti-bot systems through 6 layers:
-
-1. **Real Chrome binary** — Authentic TLS fingerprint, HTTP/2, rendering
-2. **Automation marker removal** — navigator.webdriver, chrome.runtime, cdc_ props
-3. **Realistic fingerprint** — Consistent canvas, WebGL, hardware properties
-4. **Human-like behavior** — Bézier mouse curves, variable keystroke timing
-5. **Autonomous challenge solving** — Cloudflare auto-wait, CAPTCHA checkbox click, audio STT
-6. **Session persistence** — Cookies and profile data persist across sessions
-
-## Architecture
-
-```
-Agent Layer (MCP / CLI / SDK)
-    ↓
-Command Router (9 commands)
-    ↓
-Autonomous Solver (Cloudflare + CAPTCHA)
-    ↓
-Access State Machine (classifies every page)
-    ↓
-Smart Reading Engine (multi-source extraction)
-    ↓
-Stealth Browser Runtime (Playwright + real Chrome)
-```
-
 ## Requirements
 
 - Node.js 20+
-- Chrome or Chromium installed
+- Chrome or Chromium installed (or the patched binary; see `runtime-binary/`)
 - TypeScript 5+
 
 ## License
