@@ -18,6 +18,10 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1"
+rcgen = "0.14.7"
+rustls-pki-types = "1.14.1"
+data-encoding = "2.11.0"
+rustls-pemfile = "2.2.0"
 
 [[bin]]
 name = "agentic-tls-shim"
