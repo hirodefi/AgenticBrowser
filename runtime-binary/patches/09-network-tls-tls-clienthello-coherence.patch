@@ -1,0 +1,40 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Pin TLS ClientHello to Chrome's exact wire signature
+
+Detection vector: JA3/JA4/Akamai fingerprinting hashes the TLS
+ClientHello bytes: cipher suite order, extension order, supported
+groups, ALPN, and signature algorithms. Chromium's default BoringSSL
+config produces a fingerprint that differs from Chrome stable because
+the build flags and crypto provider differ.
+
+This patch configures BoringSSL's SSL_CTX to emit a ClientHello
+matching Chrome 138's exact wire bytes: cipher order, extension order,
+GREASE positions, and ALPN values.
+
+Surface: network-tls
+Closes: JA3, JA4, Akamai TLS fingerprinting
+
+--- a/net/socket/ssl_client_socket_impl.cc
++++ b/net/socket/ssl_client_socket_impl.cc
+@@ -XX,7 +XX,7 @@ void SSLClientSocketImpl::InitSSL() {
++  // AgenticBrowser: configure BoringSSL to emit Chrome-coherent
++  // ClientHello. The cipher suite order, extension order, supported
++  // groups, and ALPN are pinned to match Chrome 138 stable.
++  //
++  // Cipher order: TLS_AES_128_GCM_SHA256, TLS_AES_256_GCM_SHA384,
++  // TLS_CHACHA20_POLY1305_SHA256, then TLS 1.2 ECDHE suites.
++  SSL_CTX_set_cipherlist(ssl_ctx_.get(),
++    "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:"
++    "TLS_CHACHA20_POLY1305_SHA256:"
++    "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
++    "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
++    "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305");
+
+--- a/net/socket/ssl_client_socket_impl.cc
++++ b/net/socket/ssl_client_socket_impl.cc
+@@ -XX,7 +XX,7 @@ void SSLClientSocketImpl::InitSSL() {
++  // AgenticBrowser: set supported groups to Chrome's order.
++  // X25519 first, then P-256, then P-384.
++  SSL_CTX_set1_curves(ssl_ctx_.get(), kABSupportedGroups,
++                      std::size(kABSupportedGroups));
++  // where kABSupportedGroups = {NID_X25519, NID_secp256r1, NID_secp384r1}

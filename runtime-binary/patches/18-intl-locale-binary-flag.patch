@@ -1,0 +1,23 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Add binary-level locale override flag
+
+Detection vector: navigator.language and Accept-Language headers must
+agree. If they differ, detection sites flag the browser as suspicious.
+JS-level locale overrides can be detected by checking the property
+descriptor on Navigator.prototype.language.
+
+This patch adds a --ab-locale=<BCP47> flag that sets the locale at
+the ICU level, ensuring all locale sources agree.
+
+Surface: intl
+Closes: locale inconsistency between JS and HTTP layers
+
+--- a/third_party/blink/renderer/platform/language.cc
++++ b/third_party/blink/renderer/platform/language.cc
+@@ -XX,7 +XX,7 @@ AtomicString DefaultLanguage() {
++  // AgenticBrowser: if --ab-locale=<BCP47> is set, use it instead
++  // of the system locale. This ensures navigator.language,
++  // Accept-Language headers, and Intl APIs all report the same value.
++  if (!ab_locale_.empty()) {
++    return AtomicString(ab_locale_.c_str());
++  }

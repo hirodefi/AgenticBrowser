@@ -1,0 +1,22 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Override hardware concurrency and device memory at system level
+
+Detection vector: navigator.hardwareConcurrency and navigator.deviceMemory
+expose the machine's CPU core count and RAM. Combined with other signals
+they contribute to unique device identification. In headless VMs these
+values often differ from real consumer machines.
+
+This patch allows these values to be set via command line flags.
+
+Surface: system
+Closes: hasHighHardwareConcurrency, hardware fingerprinting
+
+--- a/third_party/blink/renderer/core/frame/navigator.cc
++++ b/third_party/blink/renderer/core/frame/navigator.cc
+@@ -XX,7 +XX,7 @@ unsigned Navigator::hardwareConcurrency() const {
++  // AgenticBrowser: override with --ab-cores=N if set.
++  if (ab_hardware_concurrency_ > 0) return ab_hardware_concurrency_;
+
+@@ -XX,7 +XX,7 @@ unsigned Navigator::deviceMemory() const {
++  // AgenticBrowser: override with --ab-memory=N if set.
++  if (ab_device_memory_ > 0) return ab_device_memory_;

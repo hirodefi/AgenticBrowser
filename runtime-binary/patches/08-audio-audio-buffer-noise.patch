@@ -1,0 +1,26 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Inject deterministic noise into AudioBuffer output
+
+Detection vector: Audio fingerprinting creates an AudioContext, generates
+a specific oscillator signal through an AudioBuffer, and hashes the
+float samples returned by getChannelData(). Different audio stacks
+produce subtly different output due to hardware and driver differences.
+
+This patch applies a per-seed scaling factor to AudioBuffer samples
+at the platform audio layer, making each browser launch produce a
+unique but consistent audio fingerprint.
+
+Surface: audio
+Closes: AudioContext fingerprinting
+
+--- a/third_party/blink/renderer/platform/audio/audio_destination.cc
++++ b/third_party/blink/renderer/platform/audio/audio_destination.cc
+@@ -XX,7 +XX,7 @@ void AudioDestination::Render(const AudioIOPosition& output_position,
++  // AgenticBrowser: apply deterministic sample scaling to the
++  // rendered audio buffer. The scaling factor is derived from
++  // --ab-audio-factor=<float> (default: 1.0, range 0.99999-1.00001).
++  // This is applied at the platform audio layer so no JS API override
++  // is visible to detection scripts.
++  if (ab_audio_factor_ != 1.0f) {
++    ApplyAudioNoise(output_bus, ab_audio_factor_);
++  }

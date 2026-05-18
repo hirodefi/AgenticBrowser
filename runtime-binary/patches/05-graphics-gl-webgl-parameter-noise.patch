@@ -1,0 +1,38 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Randomize WebGL renderer/vendor and parameter values
+
+Detection vector: WebGL fingerprinting reads UNMASKED_VENDOR_WEBGL
+and UNMASKED_RENDERER_WEBGL via the WEBGL_debug_renderer_info extension,
+plus exact values of MAX_TEXTURE_SIZE, MAX_RENDERBUFFER_SIZE, and
+other GPU-dependent parameters. The combination uniquely identifies
+the GPU and driver. JS-level getParameter overrides are detectable
+because they change the function's toString output and property
+descriptor.
+
+This patch overrides the GL string queries and clamps parameter
+values at the command buffer translation layer, below any JS API.
+
+Surface: graphics-gl
+Closes: WebGL fingerprinting, isWebGLInconsistent
+
+--- a/gpu/command_buffer/service/context_state.cc
++++ b/gpu/command_buffer/service/context_state.cc
+@@ -XX,7 +XX,7 @@ const char* ContextState::GetGLString(GLenum name) const {
++  // AgenticBrowser: return coherent GPU strings from the browser's
++  // fingerprint profile instead of the real GPU identity.
++  // The profile is loaded from --ab-gpu-vendor and --ab-gpu-renderer flags.
++  if (name == GL_VENDOR && !ab_gpu_vendor_.empty()) return ab_gpu_vendor_.c_str();
++  if (name == GL_RENDERER && !ab_gpu_renderer_.empty()) return ab_gpu_renderer_.c_str();
+
+--- a/gpu/command_buffer/service/gles2_cmd_decoder.cc
++++ b/gpu/command_buffer/service/gles2_cmd_decoder.cc
+@@ -XX,7 +XX,7 @@ error::Error GLES2DecoderImpl::DoGetString(GLenum name, GLuint service_id) {
++  // AgenticBrowser: intercept GL_RENDERER and GL_VENDOR queries
++  // to return the profile-configured values.
++  if (name == GL_RENDERER || name == GL_VENDOR) {
++    const char* ab_str = context_state_->GetABGLString(name);
++    if (ab_str) {
++      // Return the overridden string.
++      return error::kNoError;
++    }
++  }

@@ -1,0 +1,25 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Scrub WebRTC ICE candidates at the network stack
+
+Detection vector: WebRTC fingerprinting creates a RTCPeerConnection,
+gathers ICE candidates (which contain local IP addresses), and reads
+the SDP offer. The local IPs uniquely identify the device and reveal
+VPN/proxy usage when the real IP differs from the WebRTC IP.
+
+This patch filters ICE candidates at the network layer, removing
+host-type candidates that expose local/private IP addresses.
+
+Surface: webrtc
+Closes: WebRTC IP leak, ICE candidate fingerprinting
+
+--- a/third_party/webrtc/pc/peer_connection.cc
++++ b/third_party/webrtc/pc/peer_connection.cc
+@@ -XX,7 +XX,7 @@ void PeerConnection::OnIceCandidate(
++  // AgenticBrowser: filter host-type ICE candidates to prevent
++  // local IP leakage. Only relay and srflx candidates are passed
++  // through. This is applied at the C++ layer so no JS override
++  // is detectable.
++  if (candidate.type() == "host" && !candidate.address().IsAnyIP()) {
++    // Skip host candidate to avoid leaking local IP.
++    return;
++  }

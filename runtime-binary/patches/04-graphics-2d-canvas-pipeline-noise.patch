@@ -1,0 +1,35 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Inject deterministic noise into the canvas rendering pipeline
+
+Detection vector: Canvas fingerprinting draws hidden text/shapes to a
+2D canvas, calls toDataURL() or getImageData(), and hashes the pixel
+output. The hash is unique per GPU driver, font rasterizer, and
+sub-pixel rendering engine. JS-level noise via getImageData patching
+is detectable because the override changes the function's property
+descriptor and can be detected via fn.toString() probes.
+
+This patch injects per-seed deterministic noise directly into the
+Skia canvas backend at the pixel write level, before any JS API
+is invoked. The noise is invisible to property descriptor checks
+because no JS API is overridden.
+
+Surface: graphics-2d
+Closes: canvas fingerprinting, TRANSPARENT_PIXEL
+
+--- a/third_party/blink/renderer/platform/graphics/canvas_2d/canvas_rendering_context_2d.cc
++++ b/third_party/blink/renderer/platform/graphics/canvas_2d/canvas_rendering_context_2d.cc
+@@ -XX,7 +XX,7 @@ void CanvasRenderingContext2D::DidDraw(const SkIRect& dirty_rect) {
++  // AgenticBrowser: inject deterministic pixel noise before the
++  // canvas snapshot is finalized. The seed is set per browser launch
++  // via the --ab-canvas-seed=<uint32> flag. Noise is applied to the
++  // backing store so it's present in both toDataURL and getImageData
++  // output without any JS-layer interception.
++  if (auto* recorder = GetOrCreateCanvas()->asRecordingCanvas()) {
++    ApplyCanvasNoise(recorder, dirty_rect);
++  }
+
+--- a/third_party/blink/renderer/platform/graphics/BUILD.gn
++++ b/third_party/blink/renderer/platform/graphics/BUILD.gn
+@@ -XX,7 +XX,7 @@ sources = [
++    "canvas_noise.cc",
++    "canvas_noise.h",

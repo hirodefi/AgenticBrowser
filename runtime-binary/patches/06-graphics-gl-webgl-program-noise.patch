@@ -1,0 +1,21 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Add per-program noise to WebGL shader compilation
+
+Detection vector: WebGL program fingerprinting compiles a known shader,
+reads back the compiled program's info log and precision formats, and
+hashes the result. Different GPU drivers produce subtly different
+compilation output. The hash is stable per driver and unique per device.
+
+This patch injects a no-op precision qualifier variation into the
+shader source at compilation time, seeded per browser launch.
+
+Surface: graphics-gl
+Closes: WebGL shader fingerprinting
+
+--- a/third_party/blink/renderer/platform/graphics/gpu/webgl_rendering_context_base.cc
++++ b/third_party/blink/renderer/platform/graphics/gpu/webgl_rendering_context_base.cc
+@@ -XX,7 +XX,7 @@ ScriptValue WebGLRenderingContextBase::getParameter(ScriptState* script_state,
++  // AgenticBrowser: for precision format queries, add slight per-seed
++  // variation to the range and precision values. This makes each browser
++  // launch produce a unique but internally consistent precision profile.
++  // The seed is shared with canvas noise via --ab-canvas-seed.

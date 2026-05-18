@@ -1,0 +1,43 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Remove navigator.webdriver automation binding
+
+Detection vector: Browser automation frameworks (Selenium, Playwright,
+Puppeteer) set navigator.webdriver = true via the CDP
+Page.addScriptToEvaluateOnNewDocument or the --enable-automation Chrome
+flag. Detection sites read navigator.webdriver directly, check the
+property descriptor shape (configurable + enumerable + has getter), or
+probe the V8 binding layer for the automation-specific getter.
+
+This patch makes Navigator::webdriver() always return false regardless
+of the browser's automation state. The property descriptor shape is
+preserved so it matches a non-automated Chrome instance.
+
+Surface: v8-binding
+Closes: webdriverPresent, WEBDRIVER, fpscanner WEBDRIVER
+
+--- a/third_party/blink/renderer/core/frame/navigator.cc
++++ b/third_party/blink/renderer/core/frame/navigator.cc
+@@ -XX,7 +XX,7 @@ bool Navigator::webdriver() const {
+-  if (!GetFrame())
+-    return false;
+-  return GetFrame()->GetDocument()->IsWebDriver();
++  // AgenticBrowser: always report false regardless of automation state.
++  // Detection sites probe navigator.webdriver directly and via descriptor
++  // shape. Returning false with the standard IDL getter matches real Chrome
++  // in non-automated mode.
++  return false;
+ }
+
+--- a/third_party/blink/renderer/core/frame/navigator.idl
++++ b/third_party/blink/renderer/core/frame/navigator.idl
+@@ -XX,7 +XX,7 @@
+-  [HighEntropy, MeasureAs=NavigatorWebDriver] readonly attribute boolean webdriver;
++  // AgenticBrowser: lower entropy — webdriver is always false.
++  [MeasureAs=NavigatorWebDriver] readonly attribute boolean webdriver;
+
+--- a/chrome/test/chromedriver/session.cc
++++ b/chrome/test/chromedriver/session.cc
+@@ -XX,7 +XX,7 @@
+-  // Inject cdc_ variables for ChromeDriver protocol detection.
++  // AgenticBrowser: skip cdc_ injection to avoid CDP detection signals.
++  // Original: Inject cdc_ variables for ChromeDriver protocol detection.

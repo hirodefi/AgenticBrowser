@@ -1,0 +1,26 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Pin HTTP/3 QUIC transport parameters to Chrome's values
+
+Detection vector: QUIC fingerprinting reads the transport parameters
+in the TLS handshake (initial_max_data, max_idle_timeout, etc.) and
+the QUIC version negotiation. Non-Chrome clients produce different
+parameter sets.
+
+This patch ensures the QUIC client sends Chrome 138's exact transport
+parameters.
+
+Surface: network-h3
+Closes: QUIC/HTTP3 transport fingerprinting
+
+--- a/net/quic/quic_context.cc
++++ b/net/quic/quic_context.cc
+@@ -XX,7 +XX,7 @@ void QuicContext::Initialize() {
++  // AgenticBrowser: pin QUIC transport parameters to Chrome 138 values.
++  params->initial_max_data = 1048576;
++  params->initial_max_stream_data_bidi_local = 65536;
++  params->initial_max_stream_data_bidi_remote = 65536;
++  params->initial_max_stream_data_uni = 65536;
++  params->initial_max_streams_bidi = 100;
++  params->initial_max_streams_uni = 100;
++  params->max_idle_timeout = quic::QuicTime::Delta::FromSeconds(30);
++  params->max_udp_payload_size = 1350;

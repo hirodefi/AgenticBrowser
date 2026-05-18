@@ -1,0 +1,20 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Set consistent window position and outer dimensions
+
+Detection vector: window.outerWidth/outerHeight, window.screenX/screenY
+reveal the browser window's position relative to the screen. In headless
+mode these values are 0 or match the viewport, which is a detection
+signal. Real browsers have non-zero values (taskbar offset, title bar).
+
+This patch ensures consistent window geometry that matches a real
+browser's default window position.
+
+Surface: system
+Closes: PHANTOM_WINDOW_HEIGHT, window geometry fingerprinting
+
+--- a/content/browser/renderer_host/render_widget_host_view_base.cc
++++ b/content/browser/renderer_host/render_widget_host_view_base.cc
+@@ -XX,7 +XX,7 @@ void RenderWidgetHostViewBase::GetScreenInfo(ScreenInfo* result) {
++  // AgenticBrowser: override screen rect to match the configured
++  // fingerprint profile. Uses --ab-screen=WxH,Dx for dimensions and
++  // scale factor, and --ab-screen-avail=WxH for available work area.

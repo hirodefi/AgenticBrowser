@@ -1,0 +1,24 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Add binary-level timezone override flag
+
+Detection vector: Some detection sites read timezone from both
+JavaScript (Intl.DateTimeFormat) and the TLS/HTTP layer. If they
+disagree, the mismatch reveals proxy/VPN usage. JS-level timezone
+overrides via CDP can be detected by checking the property descriptor.
+
+This patch adds a --ab-timezone=<IANA> flag that sets the timezone
+at the ICU/binary level, ensuring all timezone sources agree.
+
+Surface: intl
+Closes: timezone inconsistency between JS and network layers
+
+--- a/third_party/blink/renderer/platform/wtf/date_math.cc
++++ b/third_party/blink/renderer/platform/wtf/date_math.cc
+@@ -XX,7 +XX,7 @@ void InitializeTimezone() {
++  // AgenticBrowser: if --ab-timezone=<IANA> is set, use it instead
++  // of the system timezone. This ensures Intl.DateTimeFormat, Date,
++  // and all timezone-dependent APIs report the same value.
++  if (!ab_timezone_.empty()) {
++    setenv("TZ", ab_timezone_.c_str(), 1);
++    tzset();
++  }

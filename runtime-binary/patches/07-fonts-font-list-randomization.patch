@@ -1,0 +1,23 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Randomize font enumeration order and pad visible count
+
+Detection vector: Font fingerprinting measures the available fonts by
+rendering text with each candidate font family and measuring the glyph
+dimensions. The set of installed fonts uniquely identifies a device.
+The enumeration order and count are additional entropy sources.
+
+This patch shuffles the font list order per browser launch and pads
+the visible count to a common baseline, reducing the uniqueness of
+font-based fingerprints.
+
+Surface: fonts
+Closes: font enumeration fingerprinting
+
+--- a/third_party/blink/renderer/platform/fonts/font_cache.cc
++++ b/third_party/blink/renderer/platform/fonts/font_cache.cc
+@@ -XX,7 +XX,7 @@ void FontCache::Init() {
++  // AgenticBrowser: shuffle the font family list using the launch seed.
++  // The seed is set via --ab-font-seed=<uint32>. Shuffling changes the
++  // enumeration order without hiding fonts, so pages that rely on specific
++  // fonts still render correctly.
++  ShuffleFontList(ab_font_seed_);

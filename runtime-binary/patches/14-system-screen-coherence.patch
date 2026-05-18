@@ -1,0 +1,25 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Override screen dimensions at the system level
+
+Detection vector: Screen fingerprinting reads screen.width, screen.height,
+screen.availWidth, screen.availHeight, and devicePixelRatio. In headless
+mode, Chromium reports default values (800x600 or 1024x768) that differ
+from any real display. Even in headed mode, the exact dimensions uniquely
+identify the display.
+
+This patch allows screen dimensions to be set via command line flags,
+overriding the platform's actual display values.
+
+Surface: system
+Closes: screen fingerprinting, MQ_SCREEN, PHANTOM_SCREEN
+
+--- a/ui/display/screen.cc
++++ b/ui/display/screen.cc
+@@ -XX,7 +XX,7 @@ display::Display Screen::GetPrimaryDisplay() const {
++  // AgenticBrowser: if --ab-screen=WxH is set, override the primary
++  // display's resolution and scale factor.
++  if (!ab_screen_size_.IsEmpty()) {
++    display.set_bounds(ab_screen_size_);
++    display.set_work_area(ab_screen_work_area_);
++    display.set_device_scale_factor(ab_screen_scale_);
++  }

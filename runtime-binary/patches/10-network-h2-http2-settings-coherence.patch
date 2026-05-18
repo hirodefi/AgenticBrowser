@@ -1,0 +1,38 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Pin HTTP/2 SETTINGS to Chrome's exact wire format
+
+Detection vector: HTTP/2 fingerprinting reads the SETTINGS frame
+parameters (order, values, and initial WINDOW_UPDATE), the HEADERS
+frame pseudo-header order, and the priority frame pattern. Each
+HTTP/2 client library has a unique SETTINGS fingerprint. Chromium's
+default differs from Chrome stable in subtle ways.
+
+This patch overrides the HTTP/2 session to send Chrome 138's exact
+SETTINGS frame: HEADER_TABLE_SIZE=65536, ENABLE_PUSH=0,
+INITIAL_WINDOW_SIZE=6291456, MAX_HEADER_LIST_SIZE=262144.
+
+Surface: network-h2
+Closes: HTTP/2 SETTINGS fingerprinting (Akamai h2 fingerprint)
+
+--- a/net/spdy/spdy_session.cc
++++ b/net/spdy/spdy_session.cc
+@@ -XX,7 +XX,7 @@ void SpdySession::SendInitialSettings() {
++  // AgenticBrowser: send Chrome 138's exact SETTINGS frame.
++  // Order matters for fingerprinting: HEADER_TABLE_SIZE, ENABLE_PUSH,
++  // INITIAL_WINDOW_SIZE, MAX_HEADER_LIST_SIZE.
++  const uint32_t kABSettings[] = {
++    {SETTINGS_HEADER_TABLE_SIZE, 65536},
++    {SETTINGS_ENABLE_PUSH, 0},
++    {SETTINGS_INITIAL_WINDOW_SIZE, 6291456},
++    {SETTINGS_MAX_HEADER_LIST_SIZE, 262144},
++  };
++  for (const auto& [id, val] : kABSettings) {
++    settings_map[id] = val;
++  }
+
+--- a/net/spdy/spdy_session.cc
++++ b/net/spdy/spdy_session.cc
+@@ -XX,7 +XX,7 @@ void SpdySession::SendInitialSettings() {
++  // AgenticBrowser: send initial WINDOW_UPDATE on stream 0 to
++  // match Chrome's connection-level window of 6291456.
++  SendWindowUpdate(0, 6291456 - kInitialWindowSize);

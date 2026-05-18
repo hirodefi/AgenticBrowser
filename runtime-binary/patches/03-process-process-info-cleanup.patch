@@ -1,0 +1,31 @@
+From: AgenticBrowser <build@agentic-browser.dev>
+Subject: [PATCH] Clean up process-level automation markers
+
+Detection vector: Chromium writes automation markers to /proc/self/cmdline
+and the main module's data section. Detection libraries check for
+--enable-automation in the process command line, the presence of
+HeadlessChrome in the product name, and the --test-type flag.
+
+This patch ensures the browser identifies as standard Google Chrome
+with no test/automation markers in its process metadata.
+
+Surface: process
+Closes: HEADCHR_UA, headless detection via process info
+
+--- a/chrome/common/chrome_version.cc
++++ b/chrome/common/chrome_version.cc
+@@ -XX,7 +XX,7 @@ const char* const kProductVersion = CHROME_VERSION;
+-#if BUILDFLAG(HEADLESS)
+-const char* const kHeadlessProductName = "HeadlessChrome";
+-#endif
++// AgenticBrowser: always report as "Google Chrome" to avoid headless detection.
++#if BUILDFLAG(HEADLESS)
++const char* const kHeadlessProductName = "Google Chrome";
++#endif
+
+--- a/chrome/browser/flag_descriptions.cc
++++ b/chrome/browser/flag_descriptions.cc
+@@ -XX,7 +XX,7 @@ const char kEnableAutomationName[] = "Enable automation";
+-const char kEnableAutomationDescription[] = "Enables automation mode.";
++// AgenticBrowser: disable automation flag exposure.
++const char kEnableAutomationDescription[] = "";
