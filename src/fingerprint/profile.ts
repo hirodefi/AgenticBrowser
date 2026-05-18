@@ -231,7 +231,7 @@ export function buildProfile(overrides: ProfileOverrides = {}): FingerprintProfi
     height: screen.availHeight - 85,
   };
   const languages = [locale, locale.split('-')[0]];
-  return {
+  cached = {
     platform,
     ua,
     screen,
@@ -247,6 +247,7 @@ export function buildProfile(overrides: ProfileOverrides = {}): FingerprintProfi
     canvasNoise: r.floatRange(0.000_001, 0.000_004),
     fontSeed: r.intRange(1, 1_000_000),
   };
+  return cached;
 }
 
 export function getProfile(overrides?: ProfileOverrides): FingerprintProfile {
