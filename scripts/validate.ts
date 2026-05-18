@@ -78,6 +78,54 @@ const PROBES: Probe[] = [
     },
   },
   {
+    name: 'worker-consistency',
+    url: 'about:blank',
+    read: async (page: any) => {
+      return await page.evaluate(() => new Promise((resolve) => {
+        const pageVals = {
+          webdriver: (navigator as any).webdriver,
+          userAgent: navigator.userAgent,
+          platform: (navigator as any).platform,
+          hardwareConcurrency: (navigator as any).hardwareConcurrency,
+          deviceMemory: (navigator as any).deviceMemory,
+          languages: (navigator as any).languages,
+        };
+        try {
+          const blob = new Blob([
+            'self.postMessage({' +
+            'webdriver:navigator.webdriver,' +
+            'userAgent:navigator.userAgent,' +
+            'platform:navigator.platform,' +
+            'hardwareConcurrency:navigator.hardwareConcurrency,' +
+            'deviceMemory:navigator.deviceMemory,' +
+            'languages:Array.from(navigator.languages),' +
+            '});'
+          ], { type: 'application/javascript' });
+          const url = URL.createObjectURL(blob);
+          const w = new Worker(url);
+          const timer = setTimeout(() => resolve({ pageVals, error: 'timeout' }), 4000);
+          w.onmessage = (e) => {
+            clearTimeout(timer);
+            const workerVals = e.data;
+            const matches: Record<string, boolean> = {};
+            for (const k of Object.keys(pageVals) as (keyof typeof pageVals)[]) {
+              const pv = (pageVals as any)[k];
+              const wv = (workerVals as any)[k];
+              matches[k] = Array.isArray(pv) ? JSON.stringify(pv) === JSON.stringify(wv) : pv === wv;
+            }
+            resolve({ pageVals, workerVals, matches });
+          };
+          w.onerror = (e: any) => {
+            clearTimeout(timer);
+            resolve({ pageVals, error: e.message || 'worker error' });
+          };
+        } catch (e: any) {
+          resolve({ pageVals, error: e.message });
+        }
+      }));
+    },
+  },
+  {
     name: 'incolumitas-bot-detection',
     url: 'https://bot.incolumitas.com/',
     read: async (page) => {
@@ -217,7 +265,7 @@ function printSummary(results: any) {
     console.log(`webdriver:               ${self.webdriver ?? 'undefined'}  ${self.webdriver === false || self.webdriver === undefined ? 'PASS' : 'FAIL'}`);
     console.log(`plugins.length:          ${self.pluginsLength}  ${self.pluginsLength >= 3 ? 'PASS' : 'FAIL'}`);
     console.log(`chrome object:           ${self.chromeObject}  ${self.chromeObject === 'object' ? 'PASS' : 'FAIL'}`);
-    console.log(`chrome.runtime:          ${self.chromeRuntime}  ${self.chromeRuntime === 'object' ? 'PASS' : 'FAIL'}`);
+    console.log(`chrome.runtime:          ${self.chromeRuntime}  ${self.chromeRuntime === 'undefined' ? 'PASS' : 'FAIL'}  (real Chrome: undefined)`);
     console.log(`userAgentData.brands:    ${self.userAgentDataBrands ? 'present' : 'missing'}  ${self.userAgentDataBrands ? 'PASS' : 'FAIL'}`);
     console.log(`webgl vendor/renderer:   ${self.webglVendor ? 'present' : 'missing'}`);
     console.log(`timezone:                ${self.timezone}`);
@@ -228,6 +276,14 @@ function printSummary(results: any) {
       const d = self.getWebdriverDescriptor;
       console.log(`webdriver descriptor:    get=${d.get} set=${d.set} cfg=${d.configurable} enum=${d.enumerable}`);
     }
+  }
+  const wc = results.probes['worker-consistency']?.data;
+  if (wc?.matches) {
+    const all = Object.values(wc.matches).every(Boolean);
+    const missing = Object.entries(wc.matches).filter(([, v]) => !v).map(([k]) => k);
+    console.log(`worker consistency:      ${all ? 'PASS' : 'FAIL ('+missing.join(', ')+')'}`);
+  } else if (wc?.error) {
+    console.log(`worker consistency:      ERROR (${wc.error})`);
   }
   const inc = results.probes['incolumitas-bot-detection']?.data;
   if (inc?.newTests) {

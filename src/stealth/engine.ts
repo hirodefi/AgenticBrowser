@@ -44,7 +44,6 @@ export async function installStealth(
       return;
     }
     await applyCDPLayer(cdp, profile);
-    await autoAttachWorkers(cdp, profile, script);
   };
 
   ctx.on('page', (page) => {
@@ -114,36 +113,3 @@ async function applyCDPLayer(cdp: CDPSession, p: FingerprintProfile): Promise<vo
   } catch {}
 }
 
-async function autoAttachWorkers(
-  cdp: CDPSession,
-  profile: FingerprintProfile,
-  initScript: string,
-): Promise<void> {
-  try {
-    await cdp.send('Target.setAutoAttach', {
-      autoAttach: true,
-      waitForDebuggerOnStart: true,
-      flatten: true,
-    });
-  } catch {
-    return;
-  }
-
-  cdp.on('Target.attachedToTarget' as any, async (event: any) => {
-    try {
-      const child = (cdp as any)._sessions?.get?.(event.sessionId);
-      if (!child) return;
-      try {
-        await child.send('Runtime.evaluate', { expression: initScript, includeCommandLineAPI: false });
-      } catch {}
-      try { await child.send('Runtime.runIfWaitingForDebugger'); } catch {}
-      try {
-        await child.send('Network.setUserAgentOverride', {
-          userAgent: profile.ua.ua,
-          acceptLanguage: profile.ua.acceptLanguage,
-          platform: profile.ua.platform,
-        });
-      } catch {}
-    } catch {}
-  });
-}

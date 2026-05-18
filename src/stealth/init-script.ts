@@ -93,7 +93,7 @@ try { delete Navigator.prototype.webdriver; } catch (_) {}
 try {
   Object.defineProperty(Navigator.prototype, 'webdriver', {
     get: cloak(function() { return false; }, 'get webdriver'),
-    set: cloak(function() {}, 'set webdriver'),
+    set: undefined,
     enumerable: true,
     configurable: true,
   });
@@ -182,29 +182,46 @@ function makePlugin(name, desc, filename, mimes) {
   return pl;
 }
 
-const pdfMime = makeMime('application/pdf', 'pdf', 'Portable Document Format');
-const pdfMime2 = makeMime('text/pdf', 'pdf', 'Portable Document Format');
-const plugins = [
-  makePlugin('PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime, pdfMime2]),
-  makePlugin('Chrome PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime, pdfMime2]),
-  makePlugin('Chromium PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime, pdfMime2]),
-  makePlugin('Microsoft Edge PDF Viewer', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime, pdfMime2]),
-  makePlugin('WebKit built-in PDF', 'Portable Document Format', 'internal-pdf-viewer', [pdfMime, pdfMime2]),
+// Build plugins so that:
+//   plugins[0][0].enabledPlugin === plugins[0]    (refMatch)
+//   plugins.item(2**32) === plugins[0]            (overflowTest, ToUint32 wraps)
+// Each plugin owns its own MimeType instances so enabledPlugin references
+// are unambiguous.
+const PLUGIN_DEFS = [
+  ['PDF Viewer',              'Portable Document Format', 'internal-pdf-viewer'],
+  ['Chrome PDF Viewer',       'Portable Document Format', 'internal-pdf-viewer'],
+  ['Chromium PDF Viewer',     'Portable Document Format', 'internal-pdf-viewer'],
+  ['Microsoft Edge PDF Viewer','Portable Document Format', 'internal-pdf-viewer'],
+  ['WebKit built-in PDF',     'Portable Document Format', 'internal-pdf-viewer'],
 ];
+const plugins = PLUGIN_DEFS.map(([name, desc, file]) => {
+  const m1 = makeMime('application/pdf', 'pdf', 'Portable Document Format');
+  const m2 = makeMime('text/pdf', 'pdf', 'Portable Document Format');
+  return makePlugin(name, desc, file, [m1, m2]);
+});
+
+// MimeTypeArray exposes only the unique-by-type MIMEs Chrome reports (2).
+const uniqueMimes = [plugins[0][0], plugins[0][1]];
 
 const pluginArray = Object.create(PluginArray.prototype || {});
 plugins.forEach((p, i) => { pluginArray[i] = p; pluginArray[p.name] = p; });
 Object.defineProperty(pluginArray, 'length', { value: plugins.length, enumerable: true });
-replaceFn(pluginArray, 'item', function(i) { return plugins[i] || null; });
-replaceFn(pluginArray, 'namedItem', function(n) { return plugins.find(p => p.name === n) || null; });
+// ToUint32 conversion: native HTMLCollection-like .item() wraps via ToUint32
+// so item(2^32) === item(0). Math.floor + modulo replicates the spec.
+const toU32 = function(x) {
+  const n = Math.floor(Number(x));
+  if (!isFinite(n)) return 0;
+  return (n >>> 0);
+};
+replaceFn(pluginArray, 'item', function(i) { return plugins[toU32(i)] || null; });
+replaceFn(pluginArray, 'namedItem', function(n) { return plugins.find(function(p) { return p.name === n; }) || null; });
 replaceFn(pluginArray, 'refresh', function() {});
 
 const mimeArray = Object.create(MimeTypeArray.prototype || {});
-const allMimes = [pdfMime, pdfMime2];
-allMimes.forEach((m, i) => { mimeArray[i] = m; mimeArray[m.type] = m; });
-Object.defineProperty(mimeArray, 'length', { value: allMimes.length, enumerable: true });
-replaceFn(mimeArray, 'item', function(i) { return allMimes[i] || null; });
-replaceFn(mimeArray, 'namedItem', function(n) { return allMimes.find(m => m.type === n) || null; });
+uniqueMimes.forEach(function(m, i) { mimeArray[i] = m; mimeArray[m.type] = m; });
+Object.defineProperty(mimeArray, 'length', { value: uniqueMimes.length, enumerable: true });
+replaceFn(mimeArray, 'item', function(i) { return uniqueMimes[toU32(i)] || null; });
+replaceFn(mimeArray, 'namedItem', function(n) { return uniqueMimes.find(function(m) { return m.type === n; }) || null; });
 
 defineGetter(nav, 'plugins', () => pluginArray);
 defineGetter(nav, 'mimeTypes', () => mimeArray);
@@ -228,22 +245,13 @@ try {
 } catch (_) {}
 
 // ---------- window.chrome ----------
+// Real Chrome on a normal (non-extension) page has window.chrome present
+// but chrome.runtime is undefined — chrome.runtime only materializes inside
+// an extension's content script context. Stealth libraries that synthesize
+// chrome.runtime on every page actually leak.
 if (!window.chrome) window.chrome = {};
 const startNow = Date.now() / 1000;
 const chromeObj = window.chrome;
-if (!chromeObj.runtime) {
-  chromeObj.runtime = {
-    OnInstalledReason: { CHROME_UPDATE: 'chrome_update', INSTALL: 'install', SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update' },
-    OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
-    PlatformArch: { ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
-    PlatformNaclArch: { ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' },
-    PlatformOs: { ANDROID: 'android', CROS: 'cros', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' },
-    RequestUpdateCheckStatus: { NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' },
-    connect: cloak(() => undefined, 'connect'),
-    sendMessage: cloak(() => undefined, 'sendMessage'),
-    id: undefined,
-  };
-}
 chromeObj.loadTimes = cloak(function() {
   return {
     commitLoadTime: startNow - 0.3,
@@ -396,8 +404,16 @@ if (window.RTCPeerConnection) {
   });
 }
 
-// ---------- Battery API removal (high entropy, not present in modern Chrome) ----------
-try { delete Navigator.prototype.getBattery; } catch (_) {}
+// ---------- Battery API — real Chrome still ships getBattery; keep it ----------
+if (nav.getBattery) {
+  replaceFn(nav, 'getBattery', function() {
+    return Promise.resolve({
+      charging: true, chargingTime: 0, dischargingTime: Infinity, level: 1,
+      onchargingchange: null, onchargingtimechange: null, ondischargingtimechange: null, onlevelchange: null,
+      addEventListener: function() {}, removeEventListener: function() {}, dispatchEvent: function() { return true; },
+    });
+  }, 'getBattery');
+}
 
 // ---------- Connection (NetworkInformation) ----------
 if ('connection' in nav) {
@@ -418,6 +434,109 @@ try {
     cloak(Permissions.prototype.query, 'query');
   }
 } catch (_) {}
+
+// ---------- Worker / SharedWorker scope coherence ----------
+// Detection sites (incolumitas inconsistentWebWorkerNavigatorPropery,
+// inconsistentServiceWorkerNavigatorPropery) create a Worker, ask it to
+// report navigator.* values, and FAIL if they don't match the page's.
+// We intercept Worker construction, prepend a compact override script to
+// the worker source so the worker reports the same values.
+const WORKER_INIT = '(function(){try{' +
+  'var D=' + JSON.stringify({
+    ua: D.ua, platform: D.platform, languages: D.languages, locale: D.locale,
+    hardwareConcurrency: D.hardwareConcurrency, deviceMemory: D.deviceMemory,
+    uaPlatform: D.uaPlatform, brands: D.brands, fullVersion: D.fullVersion,
+  }) + ';' +
+  'function dg(o,p,g){try{Object.defineProperty(o,p,{get:function(){return g();},configurable:true,enumerable:true});}catch(_){}}' +
+  'var nav=self.navigator;var np=Object.getPrototypeOf(nav);' +
+  'try{Object.defineProperty(np,"webdriver",{get:function(){return false;},set:undefined,configurable:true,enumerable:true});}catch(_){}' +
+  'dg(np,"userAgent",function(){return D.ua;});' +
+  'dg(np,"platform",function(){return D.platform;});' +
+  'dg(np,"language",function(){return D.languages[0];});' +
+  'dg(np,"languages",function(){return Object.freeze(D.languages.slice());});' +
+  'dg(np,"hardwareConcurrency",function(){return D.hardwareConcurrency;});' +
+  'dg(np,"deviceMemory",function(){return D.deviceMemory;});' +
+  'if("userAgentData" in nav){var b=Object.freeze(D.brands.map(function(x){return Object.freeze({brand:x.brand,version:x.version});}));' +
+  'var ua={brands:b,mobile:false,platform:D.uaPlatform,getHighEntropyValues:function(h){var o={brands:b,mobile:false,platform:D.uaPlatform};if(!Array.isArray(h))return Promise.resolve(o);if(h.indexOf("platformVersion")>-1)o.platformVersion="";if(h.indexOf("uaFullVersion")>-1)o.uaFullVersion=D.fullVersion;return Promise.resolve(o);},toJSON:function(){return{brands:b,mobile:false,platform:D.uaPlatform};}};' +
+  'try{Object.defineProperty(np,"userAgentData",{get:function(){return ua;},configurable:true,enumerable:true});}catch(_){}}' +
+  '}catch(e){}})();';
+
+(function patchWorkers() {
+  // Strategy: intercept URL.createObjectURL on JS-typed Blobs and wrap
+  // them with WORKER_INIT before the URL is even minted. By the time
+  // new Worker(url) runs, the URL already points to wrapped content.
+  // No sync XHR, no cross-origin headaches.
+  if (typeof URL === 'undefined' || !URL.createObjectURL) return;
+  const origCreate = URL.createObjectURL;
+  function shouldWrap(blob) {
+    if (!blob || !blob.type) return false;
+    const t = String(blob.type).toLowerCase();
+    return t.indexOf('javascript') !== -1 || t.indexOf('ecmascript') !== -1;
+  }
+  replaceFn(URL, 'createObjectURL', function(blob) {
+    try {
+      if (shouldWrap(blob)) {
+        const wrapped = new Blob([WORKER_INIT, ';', blob], { type: blob.type });
+        return origCreate.call(this, wrapped);
+      }
+    } catch (_) {}
+    return origCreate.call(this, blob);
+  });
+
+  // For Workers constructed with same-origin script URLs (not blobs), the
+  // navigator overrides need to reach those workers too. We sync-fetch
+  // same-origin scripts and rewrap into a blob URL; cross-origin falls
+  // through unmodified.
+  if (typeof Worker === 'function') {
+    const OrigWorker = Worker;
+    function readSync(url) {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, false);
+        xhr.send();
+        if (xhr.status === 0 || (xhr.status >= 200 && xhr.status < 300)) return xhr.responseText;
+      } catch (_) {}
+      return null;
+    }
+    function rewriteUrl(scriptURL, options) {
+      try {
+        const urlStr = String(scriptURL);
+        if (urlStr.startsWith('blob:')) return scriptURL;
+        const sameOrigin = !urlStr.includes('://') || urlStr.startsWith(self.location.origin);
+        if (!sameOrigin) return scriptURL;
+        const source = readSync(urlStr);
+        if (source == null) return scriptURL;
+        const isModule = options && options.type === 'module';
+        const blob = new Blob([WORKER_INIT, ';', source], {
+          type: isModule ? 'text/javascript' : 'application/javascript',
+        });
+        return origCreate.call(URL, blob);
+      } catch (_) { return scriptURL; }
+    }
+    function PatchedWorker(scriptURL, options) {
+      if (!(this instanceof PatchedWorker)) return new PatchedWorker(scriptURL, options);
+      const url = rewriteUrl(scriptURL, options);
+      return Reflect.construct(OrigWorker, [url, options], PatchedWorker);
+    }
+    PatchedWorker.prototype = OrigWorker.prototype;
+    Object.setPrototypeOf(PatchedWorker, OrigWorker);
+    cloak(PatchedWorker, 'Worker');
+    try { window.Worker = PatchedWorker; } catch (_) {}
+
+    if (typeof SharedWorker === 'function') {
+      const OrigSW = SharedWorker;
+      function PatchedSharedWorker(scriptURL, options) {
+        if (!(this instanceof PatchedSharedWorker)) return new PatchedSharedWorker(scriptURL, options);
+        const url = rewriteUrl(scriptURL, options);
+        return Reflect.construct(OrigSW, [url, options], PatchedSharedWorker);
+      }
+      PatchedSharedWorker.prototype = OrigSW.prototype;
+      Object.setPrototypeOf(PatchedSharedWorker, OrigSW);
+      cloak(PatchedSharedWorker, 'SharedWorker');
+      try { window.SharedWorker = PatchedSharedWorker; } catch (_) {}
+    }
+  }
+})();
 
 })();`;
 }
